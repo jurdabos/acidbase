@@ -1,0 +1,110 @@
+[project]
+name = "acidbase"
+version = "0.2.0"
+description = "Safe scaffolding, shared workflow, dependency-patch, and CI-baseline tooling for Python repositories."
+readme = "README.md"
+# Lowered from ">=3.13" to ">=3.12" so downstream repos can install acidbase
+# in Python 3.12 environments (e. g. the Astronomer Runtime image at
+# astrocrpublic.azurecr.io/runtime:3.0-14 ships Python 3.12.12).
+# The source already targets py312 for ruff and uses no 3.13-only features.
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.3.0",
+    "packaging>=24",
+    "pygments>=2.20.0",
+    "pytest>=9.0.3",
+    "python-dotenv>=1.2.2",
+    "rich>=14.1.0",
+    "tomlkit>=0.13.3",
+]
+
+[project.scripts]
+acidbase = "acidbase.cli:main"
+
+[build-system]
+requires = ["hatchling>=1,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/acidbase"]
+
+# The repository-level templates remain the source of truth. Including them
+# under acidbase/template makes `acidbase scaffold` work from an installed
+# wheel as well as from this source checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"templates" = "acidbase/template"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.14",
+    "types-PyMySQL>=1.1.0.2025",
+]
+
+# Canonical ruff configuration for the a6a ecosystem (mirrors templates/pyproject.lint.toml).
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "__pycache__",
+    ".eggs",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+# Conservative starting selection that mirrors the legacy flake8 + isort
+# coverage. Broaden to ["E","W","F","I","B","UP","SIM","RUF"] per repo once
+# the existing code is clean (use `ruff check --fix` / `--unsafe-fixes` first).
+# E,W = pycodestyle       F = pyflakes (incl. F401/F541/F821)       I = isort
+select = ["E", "W", "F", "I"]
+# E203 conflicts with the ruff formatter; ruff itself doesn't emit W503 (that's flake8-only).
+ignore = ["E203"]
+
+[tool.ruff.lint.per-file-ignores]
+# Long string fixtures and import-only test stubs are acceptable.
+"tests/**/*.py" = ["E501", "F401"]
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+# Dual-publish configuration consumed by `acidbase push`. The presence of
+# this table opts this checkout into the private/public mirror workflow
+# described in docs/guidelines/dual_push.md. Repos that ship without dual
+# remotes can simply omit the table — `acidbase push` then preserves the
+# original bare `git push` behaviour.
+[tool.acidbase.push]
+private_remote = "origin"
+public_remote = "public"
+allowlist_file = "PUBLIC_ALLOWLIST.txt"
+gitleaks_config = ".gitleaks.toml"
+
+# Substitutions applied to every UTF-8 file copied into the public
+# projection. Patterns are Python regex; replacements are literal.
+# Add new entries as new internal markers come up. The five below cover
+# the maintainer-local roots that recur in this repo's history; see
+# docs/guidelines/dual_push.md for the projection model.
+[[tool.acidbase.push.public_substitutions]]
+pattern = 'C:[\\/]+acidvuca[\\/]+acidbase'
+replacement = "<REAL_A6E_FOLDER>"
+[[tool.acidbase.push.public_substitutions]]
+pattern = 'C:[\\/]+acidvuca'
+replacement = "<REAL_A6A_FOLDER>"
+[[tool.acidbase.push.public_substitutions]]
+pattern = '//wsl\.localhost/[^/]+<REAL_WSL_HOME>'
+replacement = "<REAL_WSL-UB_HOME>"
+[[tool.acidbase.push.public_substitutions]]
+pattern = '<REAL_WSL_HOME>'
+replacement = "<REAL_WSL_HOME>"
+[[tool.acidbase.push.public_substitutions]]
+pattern = 'D:[\\/]+tanul'
+replacement = "<REAL_TANUL_FOLDER>"
+[[tool.acidbase.push.public_substitutions]]
+pattern = 'D:[\\/]+lifeat'
+replacement = "<REAL_LIFEAT_FOLDER>"

@@ -1,0 +1,36 @@
+# Default-ruleset gitleaks config used by the PRIVATE acidbase repository.
+#
+# The companion `.gitleaks.toml` is used by the public mirror and adds three
+# repo-specific rules (internal-private-doc-paths, internal-warp-md,
+# internal-host-paths) that trip on internal markers leaking into the public
+# surface. Those rules are intentional protective measures for the public
+# mirror, but they would always fire on the private repo by design:
+# `src/acidbase/priority_manager.py` and maintainer-local
+# `C:\acidvuca\...` paths are *supposed* to be in the private history.
+#
+# This file therefore only extends the upstream default ruleset (AWS keys,
+# GitHub tokens, generic high-entropy secrets, ...) so the private CI still
+# catches real leaks without the false-positive flood from the internal-*
+# rules. The path/regex allowlist mirrors `.gitleaks.toml` so safe-by-
+# convention paths (docs, the lock file, the changelog, .env placeholders)
+# behave identically across both configurations.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Private-repo allowlist (matches the public-mirror allowlist minus internal-*)"
+paths = [
+    '''\.gitleaks(-private)?\.toml$''',
+    '''(?i)^docs/.*\.md$''',
+    '''(?i)CHANGELOG\.md$''',
+    '''.*\.lock$''',
+]
+regexes = [
+    '''api_key_here''',
+    '''db_user''',
+    '''db_password''',
+    '''placeholder''',
+    '''example[_-]?token''',
+    '''\{\{[A-Z0-9_]+\}\}''',
+]

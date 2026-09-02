@@ -1,0 +1,98 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: ruff (check + format)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python from .python-version / pyproject
+        run: uv python install
+
+      - name: Sync dev dependencies
+        run: uv sync --frozen --extra dev || uv sync --frozen
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+  gitleaks:
+    name: gitleaks (CLI, MIT)
+    # Full-history scan with the public-mirror leak-guard rules. Only runs on
+    # the public mirror (jurdabos/acidbase), where the `internal-*` rules in
+    # .gitleaks.toml are the whole point: they catch anything that escaped
+    # PUBLIC_ALLOWLIST.txt. On the private repo (jurdabos/acidbase-private) the
+    # same rules would always fire on legitimately-internal content (e.g.
+    # `src/acidbase/priority_manager.py`, `docs/projects/`, maintainer-local
+    # paths), so we run the `gitleaks-private` job below there instead. Job
+    # name is preserved verbatim because the public repo's branch protection
+    # requires the status check `gitleaks (CLI, MIT)`.
+    if: github.repository == 'jurdabos/acidbase'
+    runs-on: ubuntu-latest
+    env:
+      # Pin explicitly; bump deliberately. Never use 'latest'.
+      GITLEAKS_VERSION: "8.30.1"
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks CLI
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Gitleaks scan
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose --no-banner
+
+  gitleaks-private:
+    name: gitleaks (private, default ruleset)
+    # Companion to the `gitleaks` job above. Runs only on the private repo
+    # (jurdabos/acidbase-private) where the public-mirror leak-guard rules are
+    # inappropriate. Uses `.gitleaks-private.toml` which only extends the
+    # upstream default ruleset, so this CI still catches real secrets (AWS
+    # keys, GitHub tokens, JWTs, ...) without the false-positive flood from
+    # the `internal-*` rules in `.gitleaks.toml`.
+    if: github.repository == 'jurdabos/acidbase-private'
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.30.1"
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks CLI
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Gitleaks scan (default ruleset only)
+        run: gitleaks detect --source . --config .gitleaks-private.toml --redact --verbose --no-banner

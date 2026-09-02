@@ -1,0 +1,51 @@
+# Canonical pre-commit config for the a6a ecosystem (mirrors templates/.pre-commit-config.yaml).
+# Bump revs with: pre-commit autoupdate
+repos:
+  # Keep uv.lock in sync with pyproject.toml, and (acidbase-specific) keep
+  # requirements.txt mirrored from uv.lock.
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.15
+    hooks:
+      - id: uv-lock
+      - id: uv-export         # acidbase ships a requirements.txt; keep it synced
+
+  # Single unified linter + formatter (replaces black + isort + flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Secret scanning. We call the system MIT-licensed `gitleaks` binary directly
+  # rather than pulling the upstream gitleaks pre-commit hook (which uses
+  # `language: golang` and tries to `go install` from source on each new clone).
+  # Install once: `winget install -e --id Gitleaks.Gitleaks` (Windows) or
+  # `brew install gitleaks` / distro package on POSIX.
+  #
+  # Config: `.gitleaks-private.toml` (default ruleset only, no `internal-*`
+  # rules). The hook ships to both repos via PUBLIC_ALLOWLIST.txt, so the
+  # invocation must be identical on the private repo *and* on the public
+  # mirror. On the private side the `internal-*` rules in `.gitleaks.toml`
+  # would always fire on legitimately-internal content; on the public side
+  # contributors never have access to that content anyway, so the default
+  # ruleset is sufficient locally. Strict public-mirror enforcement still
+  # happens in two other places: (1) the `gitleaks (CLI, MIT)` job in
+  # `.github/workflows/lint.yml`, gated to the public repo and run over the
+  # full mirrored history; (2) the local public-push preflight in
+  # `acidbase push --to public/--to both`, which runs `.gitleaks.toml`
+  # against the working tree before any push to the public remote
+  # (see `docs/guidelines/dual_push.md`).
+  #
+  # Scope: `git --pre-commit --staged` is the gitleaks 8.30+ documented
+  # pre-commit incantation; it scans ONLY the staged diff, not the whole repo
+  # history.
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks (system binary, staged-only)
+        entry: gitleaks
+        args: ["git", "--pre-commit", "--staged", "--config", ".gitleaks-private.toml", "--redact", "--no-banner", "."]
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

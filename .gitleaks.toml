@@ -1,0 +1,62 @@
+# Canonical gitleaks config for the public acidbase repository.
+# Extends the upstream default ruleset, plus a couple of repo-specific rules
+# that catch internal markers we explicitly do not want in the public mirror.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public-mirror allowlist"
+# Paths that are safe by convention.
+paths = [
+    '''\.gitleaks\.toml$''',
+    # `.gitleaks-private.toml` is the private repo's gitleaks config; it
+    # ships to the public mirror through PUBLIC_ALLOWLIST.txt but is
+    # never consumed there (the public-side `gitleaks (CLI, MIT)` job
+    # uses `.gitleaks.toml`). Its header comment legitimately mentions
+    # the very markers the rules below catch (it has to, to explain
+    # *why* the file exists), so allowlist it.
+    '''\.gitleaks-private\.toml$''',
+    '''(?i)^docs/.*\.md$''',
+    '''(?i)CHANGELOG\.md$''',
+    '''.*\.lock$''',
+]
+# Token placeholders we use in .env.example files.
+regexes = [
+    '''api_key_here''',
+    '''db_user''',
+    '''db_password''',
+    '''placeholder''',
+    '''example[_-]?token''',
+    '''\{\{[A-Z0-9_]+\}\}''',
+]
+
+# --- Custom rules: catch internal markers leaking into the public mirror -----
+# These rules trip on filenames or path fragments that should only ever live in
+# the private repo. Adjust patterns when adding a new internal-only artefact.
+
+[[rules]]
+id = "internal-private-doc-paths"
+description = "Reference to a private-only doc artefact (projects ledger / internal style guide)"
+# The bare `docs/projects/` prefix used to live in this alternation, but it
+# is just a generic directory name; mentioning the substring in code
+# comments or workflow rationale does not reveal anything private, and
+# real files at that path are blocked by PUBLIC_ALLOWLIST.txt anyway. The
+# remaining entries are SPECIFIC private filenames whose mere mention
+# would signal extant internal artefacts.
+regex = '''(?i)(docs/guidelines/style_guide\.md|migration_log/|project_priorities\.csv|projects_catalog\.md|project_prioritization\.md)'''
+tags = ["internal", "path"]
+
+[[rules]]
+id = "internal-warp-md"
+description = "Reference to the private WARP.md guidance file"
+regex = '''(?m)(^|\W)WARP\.md(\W|$)'''
+tags = ["internal", "path"]
+
+[[rules]]
+id = "internal-host-paths"
+description = "Personal absolute paths that must not appear in the public mirror"
+# Matches the dev-box drive layouts used by this repo's maintainer; bare
+# `C:` / `D:` references are too noisy so we anchor on the specific roots.
+regex = '''(?i)(C:[\\/]+acidvuca|D:[\\/]+tanul|D:[\\/]+lifeat|//wsl\.localhost/[^/]+/home/blai|/home/blai)'''
+tags = ["internal", "path"]

@@ -1,0 +1,13 @@
+# CODEOWNERS
+# Any path that requires a review by the repo owner before merge.
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Catch-all default reviewer.
+*                              @jurdabos
+
+# Hard guards: changing any of these affects what may appear in the public mirror,
+# so explicitly require an owner review.
+/PUBLIC_ALLOWLIST.txt          @jurdabos
+/.gitleaks.toml                @jurdabos
+/.github/                      @jurdabos
+/templates/                    @jurdabos

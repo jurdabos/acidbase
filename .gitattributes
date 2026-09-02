@@ -1,0 +1,16 @@
+* text=auto
+
+# Keep lockfiles LF-only
+uv.lock text eol=lf
+
+# Common LF-only files
+*.sh text eol=lf
+
+# Python sources are LF-only so `ruff format` stays a no-op across Windows/WSL.
+*.py text eol=lf
+*.pyi text eol=lf
+
+# Configs and CI manifests too (avoids ruff format / yamllint churn).
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

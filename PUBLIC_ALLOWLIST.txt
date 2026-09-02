@@ -1,0 +1,103 @@
+# PUBLIC_ALLOWLIST
+#
+# Source of truth for which paths may live in the public mirror of acidbase.
+# Used in two places:
+#   1. git filter-repo --paths-from-file PUBLIC_ALLOWLIST.txt
+#      (history is rewritten to keep only these paths; everything else is dropped)
+#   2. .github/workflows/public-allowlist.yml
+#      (CI fails any PR that touches a path not in this list)
+#
+# Format: one path or glob per line. Blank lines and lines starting with `#` are ignored.
+# filter-repo accepts glob via --paths-from-file when the line contains '*'; otherwise
+# it is treated as a literal path prefix. The CI guard uses `grep -E` patterns derived
+# from this file (see workflow).
+#
+# Add a new entry only after confirming the file/dir contains no internal references
+# (ledger, project codenames, internal hosts, ACIDVUCA portfolio details).
+#
+# This list is deliberately default-DENY and enumerates files individually, so
+# forgetting an entry holds a file back rather than leaking one. The cost is
+# that a NEW module can be omitted while a published module imports it, which
+# once shipped an unimportable public package. `acidbase push` now guards that
+# case: the pre-flight resolves every intra-package import in the projection
+# and refuses a public destination when one does not resolve. Prefer fixing the
+# omission here over passing `--skip-projection-check`.
+
+# Project root
+.env.example
+.gitattributes
+.gitignore
+.gitleaks.toml
+.gitleaks-private.toml
+.pre-commit-config.yaml
+.python-version
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+LICENSE
+PUBLIC_ALLOWLIST.txt
+README.md
+main.py
+pyproject.toml
+requirements.txt
+uv.lock
+
+# CI and CODEOWNERS
+.github/CODEOWNERS
+.github/workflows/lint.yml
+.github/workflows/public-allowlist.yml
+
+# Python package source
+src/acidbase/__init__.py
+src/acidbase/cli.py
+src/acidbase/cli_utils.py
+src/acidbase/py.typed
+src/acidbase/push.py
+src/acidbase/scaffold.py
+src/acidbase/security/__init__.py
+src/acidbase/security/alerts.py
+src/acidbase/security/cli.py
+src/acidbase/security/patcher.py
+src/acidbase/security/profiles.py
+src/acidbase/security/publisher.py
+src/acidbase/security/scanner.py
+src/acidbase/security/shell.py
+src/acidbase/security/verifier.py
+src/acidbase/versioning.py
+src/acidbase/workflow.py
+
+# Tests
+tests/security/__init__.py
+tests/security/test_alerts.py
+tests/security/test_patcher.py
+tests/security/test_profiles.py
+tests/security/test_scanner.py
+tests/security/test_security_cli.py
+tests/security/test_shell.py
+tests/security/test_verifier.py
+tests/test_cli_utils.py
+tests/test_placeholder.py
+tests/test_push.py
+tests/test_scaffold.py
+tests/test_versioning.py
+tests/test_workflow.py
+
+# Canonical CI / lint / secret-scan templates (the public value proposition)
+templates/README.md
+templates/.github/workflows/lint.yml
+templates/.gitleaks.toml
+templates/.pre-commit-config.yaml
+templates/cli.py
+templates/pyproject.lint.toml
+
+# Public docs
+docs/guidelines/dual_push.md
+docs/guidelines/scaffolding.md
+docs/guidelines/security_patching.md
+docs/guidelines/versioning.md
+
+# Public-safe scripts
+scripts/list_symbols.py
+
+# Sanitized example config (paths replaced with placeholders before publication)
+config/security_patch.toml

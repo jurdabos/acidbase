@@ -1,0 +1,28 @@
+# Superseded template versions, one per line: <template path> <sha256>.
+#
+# The digest is sha256 over the UTF-8 text after stripping a BOM and
+# normalizing CRLF to LF, i.e. the same comparison `acidbase scaffold` uses.
+# A child file that matches one of these verbatim is an *old acidbase
+# baseline*, not local policy; scaffold reports it as `stale` and rewrites
+# it only under `--refresh-baseline`. Anything that matches neither the
+# current template nor an entry here stays `preserve`.
+#
+# tests/test_scaffold.py walks git history and fails when a historical
+# template blob is missing here, so every template change must append the
+# digest of the version it replaces. Compute with:
+#   python -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read().decode('utf-8-sig').replace('\r\n','\n').encode()).hexdigest())" <file>
+
+# .pre-commit-config.yaml
+.pre-commit-config.yaml b6ba971ab3699a57674c822138a98a33b69265cb72c810f57539881e10e2d707  # 2026-05 remote uv/ruff v0.8.0/gitleaks hooks
+.pre-commit-config.yaml 232af526bacd3e40bc93881b567ebc333dd38a481d6188e9ec7adc01c10af534  # 2026-09-20 local hooks without markdown in types_or
+
+# .github/workflows/lint.yml
+.github/workflows/lint.yml b92ff4f6ce3d0bb894176113603271912593349ec2a2e65bdc5a5bcec9cb40d7  # 2026-05 without the `acidbase hooks` guard step
+
+# cli.py
+cli.py f04f82dba8389f6538e4b9010da95c0648cde5acd9f78a0f1548cfd1890f03c7  # 2026-05 self-contained push implementation
+cli.py a06fa865030fab24e730524c3d25c25392e6de79fe5537441af464ecd0bc14b0  # 2026-09 imports push, before bump was mounted
+
+# pyproject.lint.toml (appended, never compared as a file; recorded for completeness)
+pyproject.lint.toml 5a49ecbd14d68d0a417a5048545ecd76af3e787b99caf55b4ce232ab159d84b1
+pyproject.lint.toml 00387ebc212d78f4d8f04932098570e9a5aff2357f55de3af3aa71bc0f157015

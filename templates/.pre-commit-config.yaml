@@ -1,0 +1,54 @@
+# Canonical pre-commit config for the a6a ecosystem.
+#
+# Every hook is `repo: local` / `language: system`, so this file pins no tool
+# version of its own. Each version has exactly one owner elsewhere:
+#   - uv:       the `uv` on PATH.
+#   - ruff:     whatever uv.lock resolves. `uv run --frozen python -m ruff` is
+#               the same binary CI runs via `uv run ruff` in
+#               .github/workflows/lint.yml, so the hook and CI cannot disagree.
+#               (`python -m ruff` rather than bare `ruff` so a repo that forgot
+#               to lock ruff fails loudly instead of falling back to a PATH ruff.)
+#   - gitleaks: the system binary, pinned in CI by GITLEAKS_VERSION.
+#
+# Bump ruff with `uv lock --upgrade-package ruff`, never by editing this file.
+# `uv run acidbase hooks` reports repos that still carry a drifting remote pin.
+repos:
+  - repo: local
+    hooks:
+      # Keep uv.lock in sync with pyproject.toml.
+      - id: uv-lock
+        name: uv lock
+        entry: uv lock
+        language: system
+        files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
+        pass_filenames: false
+
+      # Single unified linter + formatter (replaces black + isort + flake8).
+      # ruff must be in [dependency-groups].dev so uv.lock resolves it.
+      - id: ruff
+        name: ruff check (version from uv.lock)
+        entry: uv run --frozen python -m ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format (version from uv.lock)
+        entry: uv run --frozen python -m ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        require_serial: true
+
+      # Secret scanning via the MIT-licensed `gitleaks` CLI on PATH, not the
+      # upstream pre-commit hook (which is `language: golang` and `go install`s
+      # from source on every fresh clone). Install once:
+      # `winget install -e --id Gitleaks.Gitleaks` (Windows) or
+      # `brew install gitleaks` / distro package on POSIX.
+      # `git --pre-commit --staged` is the gitleaks 8.30+ incantation; it scans
+      # only the staged diff, not the whole history (CI does that).
+      - id: gitleaks
+        name: gitleaks (system binary, staged-only)
+        entry: gitleaks
+        args: ["git", "--pre-commit", "--staged", "--config", ".gitleaks.toml", "--redact", "--no-banner", "."]
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

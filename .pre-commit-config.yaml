@@ -1,0 +1,76 @@
+# Canonical pre-commit config for the a6a ecosystem (mirrors templates/.pre-commit-config.yaml;
+# tests/test_hooks.py asserts the shared hooks stay identical).
+#
+# Every hook is `repo: local` / `language: system`, so this file pins no tool
+# version of its own. Each version has exactly one owner elsewhere:
+#   - uv:       the `uv` on PATH.
+#   - ruff:     whatever uv.lock resolves. `uv run --frozen python -m ruff` is
+#               the same binary CI runs via `uv run ruff` in
+#               .github/workflows/lint.yml, so the hook and CI cannot disagree.
+#   - gitleaks: the system binary, pinned in CI by GITLEAKS_VERSION.
+#
+# Bump ruff with `uv lock --upgrade-package ruff`, never by editing this file.
+# `uv run acidbase hooks` reports repos that still carry a drifting remote pin.
+repos:
+  - repo: local
+    hooks:
+      # Keep uv.lock in sync with pyproject.toml, and (acidbase-specific) keep
+      # requirements.txt mirrored from uv.lock.
+      - id: uv-lock
+        name: uv lock
+        entry: uv lock
+        language: system
+        files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
+        pass_filenames: false
+      - id: uv-export
+        name: uv export (requirements.txt)
+        entry: uv export --frozen --output-file=requirements.txt
+        language: system
+        files: ^(uv\.lock|pyproject\.toml|uv\.toml)$
+        pass_filenames: false
+
+      # Single unified linter + formatter (replaces black + isort + flake8).
+      # ruff must be in [dependency-groups].dev so uv.lock resolves it.
+      - id: ruff
+        name: ruff check (version from uv.lock)
+        entry: uv run --frozen python -m ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format (version from uv.lock)
+        entry: uv run --frozen python -m ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        require_serial: true
+
+      # Secret scanning. We call the system MIT-licensed `gitleaks` binary directly
+      # rather than pulling the upstream gitleaks pre-commit hook (which uses
+      # `language: golang` and tries to `go install` from source on each new clone).
+      # Install once: `winget install -e --id Gitleaks.Gitleaks` (Windows) or
+      # `brew install gitleaks` / distro package on POSIX.
+      #
+      # Config: `.gitleaks-private.toml` (default ruleset only, no `internal-*`
+      # rules). The hook ships to both repos via PUBLIC_ALLOWLIST.txt, so the
+      # invocation must be identical on the private repo *and* on the public
+      # mirror. On the private side the `internal-*` rules in `.gitleaks.toml`
+      # would always fire on legitimately-internal content; on the public side
+      # contributors never have access to that content anyway, so the default
+      # ruleset is sufficient locally. Strict public-mirror enforcement still
+      # happens in two other places: (1) the `gitleaks (CLI, MIT)` job in
+      # `.github/workflows/lint.yml`, gated to the public repo and run over the
+      # full mirrored history; (2) the local public-push preflight in
+      # `acidbase push --to public/--to both`, which runs `.gitleaks.toml`
+      # against the working tree before any push to the public remote
+      # (see `docs/guidelines/dual_push.md`).
+      #
+      # Scope: `git --pre-commit --staged` is the gitleaks 8.30+ documented
+      # pre-commit incantation; it scans ONLY the staged diff, not the whole repo
+      # history.
+      - id: gitleaks
+        name: gitleaks (system binary, staged-only)
+        entry: gitleaks
+        args: ["git", "--pre-commit", "--staged", "--config", ".gitleaks-private.toml", "--redact", "--no-banner", "."]
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

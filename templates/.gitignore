@@ -1,0 +1,177 @@
+# Canonical .gitignore for the a6a ecosystem.
+# Single source of truth maintained in acidbase/templates/.gitignore.
+
+# Agenticity
+.serena/
+
+# Backup files
+*.backup
+*.bak
+app_backup/
+
+# Byte-compiled/optimized/DLL files
+*$py.class
+*.egg-info/
+*.py[cod]
+*.pyo
+/Backup.egg-info/
+__pycache__/
+
+# C extensions
+*.so
+
+# celery beat schedule file
+celerybeat-schedule
+
+# Distribution/packaging
+*.egg
+.eggs/
+.installed.cfg
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+pip-wheel-metadata/
+sdist/
+share/python-wheels/
+var/
+wheels/
+
+# Django stuff
+*.log
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+
+# Environments
+# .python-version is deliberately tracked: CI's `uv python install` reads it.
+.env
+.venv/
+ENV/
+env.bak/
+env/
+venv.bak/
+venv/
+
+# Flask stuff
+.webassets-cache
+instance/
+
+# IDE
+*.swo
+*.swp
+*~
+.idea/
+.junie/
+.vscode/
+AGENTS.md
+WARP.md
+
+# Installer logs
+pip-delete-this-directory.txt
+pip-log.txt
+
+# IPython
+ipython_config.py
+profile_default/
+
+# mkdocs documentation
+/site
+
+# mypy
+.dmypy.json
+.mypy_cache/
+dmypy.json
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific/local data/models/dumps/exports
+*.csv
+*.db
+*.gz
+*.npy
+*.parquet
+*.sql
+*.sqlite
+*.sqlite3
+*.tar
+*.zip
+/backup.log
+analytics/
+checkpoints/
+data/
+datasets/
+logs/
+models/
+temp/
+uploads/
+
+# PyBuilder
+target/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Pyre type checker
+.pyre/
+
+# Quarto
+/.quarto/
+/_site/
+
+# Rope project settings
+.ropeproject
+
+# Ruff
+.ruff_cache/
+
+# SageMath parsed files
+*.sage.py
+
+# Scrapy stuff
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Test/typing/coverage/caches
+*.cover
+.cache
+.coverage
+.coverage.*
+.hypothesis/
+.mypy_cache/
+.nox/
+.pytest_cache/
+.tox/
+coverage.xml
+htmlcov/
+nosetests.xml
+simple_test.*
+test*.jpg
+test*.png
+test*.svg
+test_output.*
+
+# Translations
+*.mo
+*.pot
+
+# WebDriver files
+.wdm/
+webdrivers/

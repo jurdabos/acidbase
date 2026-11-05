@@ -1,0 +1,176 @@
+name: public-allowlist
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-allowlist-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  enforce-allowlist:
+    name: Enforce PUBLIC_ALLOWLIST.txt
+    # Same dual-repo execution rationale as the `gitleaks` job in lint.yml:
+    # this workflow file ships to both `jurdabos/acidbase` (public mirror) and
+    # `jurdabos/acidbase-private`. Enforcing PUBLIC_ALLOWLIST.txt only makes
+    # sense for the public mirror; on the private repo every PR that touches
+    # `src/acidbase/priority_manager.py`, `docs/projects/`, or any other
+    # private-only artefact would legitimately exit non-zero. Skip the job
+    # entirely there.
+    if: github.repository == 'jurdabos/acidbase'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: List changed files
+        id: changes
+        shell: bash
+        run: |
+          # Resolve the comparison base. For PRs use the merge-base of
+          # github.event.pull_request.base.sha. For pushes use github.event.before
+          # when it points to a real commit; otherwise (first push, force-push
+          # from nothing, etc.) treat every tracked file at HEAD as "changed".
+          base=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -n "$base" ] && git cat-file -e "$base" 2>/dev/null; then
+            # Use --diff-filter=ACMR so deletions and rename-source rows are
+            # skipped: removing a file never violates the allowlist; adding /
+            # modifying / renaming-into a path does.
+            git diff --name-only --diff-filter=ACMR "$base"...HEAD | sort -u > changed.txt
+          else
+            # No usable base (first commit on a fresh repo, force-push from
+            # nothing). Enforce the allowlist against every file at HEAD.
+            git ls-tree -r --name-only HEAD | sort -u > changed.txt
+          fi
+          echo "Changed files:"
+          cat changed.txt || true
+
+      - name: Build allowlist regex
+        shell: bash
+        run: |
+          # Turn PUBLIC_ALLOWLIST.txt into one ERE pattern per line. The allowlist
+          # only contains literal POSIX paths today, so the only metachar to escape
+          # is '.' (dot). Each line is anchored to start-of-path and allowed to
+          # match either the exact entry or anything under a directory entry.
+          awk '
+            /^[[:space:]]*#/ { next }
+            /^[[:space:]]*$/ { next }
+            {
+              sub(/[[:space:]]+$/, "", $0)
+              gsub(/\./, "\\.", $0)
+              print "^" $0 "(/|$)"
+            }
+          ' PUBLIC_ALLOWLIST.txt > allowlist.regex
+          echo "Allowlist patterns:"
+          cat allowlist.regex
+
+      - name: Reject paths not in PUBLIC_ALLOWLIST.txt
+        shell: bash
+        run: |
+          if [ ! -s changed.txt ]; then
+            echo "No changed files in scope; nothing to enforce."
+            exit 0
+          fi
+          bad=$(grep -v -E -f allowlist.regex changed.txt || true)
+          if [ -n "$bad" ]; then
+            echo ""
+            echo "::error::The following changed paths are not covered by PUBLIC_ALLOWLIST.txt:"
+            printf '  %s\n' $bad
+            echo ""
+            echo "Either add the path to PUBLIC_ALLOWLIST.txt (and confirm it contains no"
+            echo "internal references), or move the file into the private repo instead."
+            exit 1
+          fi
+          echo "All changed paths are covered by the public allowlist."
+
+  importable:
+    name: Published package is importable
+    # Companion to enforce-allowlist, covering the OPPOSITE failure direction.
+    #
+    # enforce-allowlist catches OVER-publishing: a changed path that the
+    # allowlist does not cover. It is structurally blind to UNDER-publishing,
+    # because a file the allowlist forgot never reaches this repo at all, so it
+    # can never appear in the changed-file set. That is exactly how an
+    # unimportable package once shipped: `src/acidbase/cli.py` was published
+    # while `src/acidbase/cli_utils.py`, which it imports, was omitted from
+    # PUBLIC_ALLOWLIST.txt, and `import acidbase.cli` raised ModuleNotFoundError
+    # for anyone installing from the mirror.
+    #
+    # `acidbase push` now gates this locally before publishing (its pre-flight
+    # resolves the projection's intra-package imports). This job is the
+    # after-the-fact net for anything that bypassed that gate — a
+    # `--skip-projection-check` override, or a commit pushed by other means.
+    # Importing for real, rather than re-implementing the resolver in YAML, is
+    # deliberate: it tests the property a consumer actually depends on and
+    # cannot drift from the implementation.
+    if: github.repository == 'jurdabos/acidbase'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python from .python-version / pyproject
+        run: uv python install
+
+      - name: Sync runtime dependencies
+        run: uv sync --frozen
+
+      - name: Import every published module
+        run: |
+          uv run python - <<'PY'
+          import importlib
+          import pkgutil
+          import sys
+
+          import acidbase
+
+          # Only a MISSING IN-PACKAGE MODULE is treated as a failure: that is
+          # the under-publishing bug this job exists to catch. An absent
+          # third-party dependency is a different (packaging) problem and is
+          # reported as a warning, so an optional-dependency module cannot
+          # false-fail the publish gate. Verified locally against the private
+          # tree, where `acidbase.priority_manager` legitimately raises
+          # ModuleNotFoundError('pymysql').
+          missing_modules: list[str] = []
+          other_problems: list[str] = []
+          for module in pkgutil.walk_packages(acidbase.__path__, prefix="acidbase."):
+              try:
+                  importlib.import_module(module.name)
+              except ModuleNotFoundError as exc:
+                  name = exc.name or ""
+                  if name == "acidbase" or name.startswith("acidbase."):
+                      missing_modules.append(f"{module.name} imports {name}, which is not published")
+                  else:
+                      other_problems.append(f"{module.name}: third-party module {name!r} not installed")
+              except Exception as exc:  # noqa: BLE001 - surface anything else as a warning
+                  other_problems.append(f"{module.name}: {type(exc).__name__}: {exc}")
+          for line in other_problems:
+              print(f"::warning::{line}")
+          if missing_modules:
+              print("::error::The published package imports modules it does not publish:")
+              for line in missing_modules:
+                  print(f"  {line}")
+              print("")
+              print("Add the missing path(s) to PUBLIC_ALLOWLIST.txt and re-publish.")
+              sys.exit(1)
+          print("All published acidbase modules import cleanly.")
+          PY

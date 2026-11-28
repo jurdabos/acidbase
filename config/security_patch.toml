@@ -1,0 +1,59 @@
+# Example configuration for `acidbase patch`.
+#
+# Resolution order (highest to lowest priority):
+#   1. --config <path> CLI flag
+#   2. $ACIDBASE_SECURITY_CONFIG env var pointing to a file
+#   3. <repo-root>/config/security_patch.toml  (this file)
+#
+# Replace the placeholders below with paths that match your own checkout layout.
+# Add a [profiles.<RepoName>] block only when the on-disk layout deviates from
+# the defaults below or when the repo needs a non-standard publish command.
+
+[defaults]
+# Roots are tried in order; the first one whose `<root>/<repo>` exists wins.
+# UNC paths work on Windows; on Linux/WSL they simply do not exist and fall through.
+roots = [
+    "C:/path/to/your/repos",
+    "//wsl.localhost/<distro>/home/<user>",
+    "/home/<user>",
+    "~/projects",
+]
+
+# Repos always skipped during scans (empty mirrors, study-only forks, archived).
+skip = [
+    "archived-repo",
+    "study-fork",
+]
+
+# Default push command. `{branch}` and `{repo}` are filled in at run time.
+push_command = ["git", "push", "origin", "{branch}"]
+
+# --- Per-repo overrides --------------------------------------------------
+
+# Example: a repo checked out under two different casings on different hosts.
+# Remove this block or replace with your own real overrides.
+[profiles.SomeRepo]
+locals = ["somerepo", "SomeRepo"]
+
+# Example: a repo with a custom publish wrapper and a non-default root.
+# The resolver requires a `.git` entry at the candidate path, so misconfigured
+# parent paths fall through cleanly instead of being silently selected.
+[profiles.custom-app]
+paths = [
+    "D:/projects/custom-app",
+    "//wsl.localhost/<distro>/home/<user>/custom-app",
+    "/home/<user>/custom-app",
+]
+push_command = ["uv", "run", "custom-app", "push"]
+
+# Example: a repo whose npm lockfile is under a subdirectory (e.g. frontend/).
+# `npm_dir` is relative to the repo root and is consumed by `--ecosystem npm`
+# both during the patch (where to run npm install) and during verification
+# (which package-lock.json to fetch from origin).
+[profiles.web-app]
+npm_dir = "frontend"
+
+# Real-world instance of the layout above: bracket keeps its frontend
+# lockfile under frontend/. Everything else resolves from [defaults].
+[profiles.bracket]
+npm_dir = "frontend"
